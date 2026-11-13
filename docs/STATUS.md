@@ -1,5 +1,21 @@
 # BustedAI — būsena ir darbai
 
+## Atnaujinimas (Tomas, 2026-11-14): telefonija + smegenys veikia
+
+Plano pakeitimai (aptarti su Tomu, dar reikia suderinti su visais):
+- **Skambutis per naršyklę, ne per telefono numerius.** Naujai Twilio paskyrai (sukurtai ne JAV) skambučiai į tikrus numerius blokuojami (klaida 21216, reikia verslo profilio). Todėl „sukčius“ ir „auka“ yra du tinklalapiai: `/phone/scammer.html` ir `/phone/victim.html` (Twilio Voice JS SDK).
+- **Transkripcija – Twilio Real-Time Transcription su Deepgram nova-3 (lt) + raktažodžių užuominos**, ne ElevenLabs. Nereikia /media WebSocket.
+- **Jokių balso įspėjimų aukai.** 3 lygis → SMS šeimai. 5 lygis → skambutis iškart nutraukiamas + SMS šeimai. Po skambučio (jei buvo 3+) → santrauka SMS žinute.
+- SMS siunčiamos vardu „BustedAI“ (Twilio Messaging Service, sukuriamas automatiškai).
+
+Kas padaryta:
+- `src/index.ts` (Fastify), `src/telephony/` (žetonai, /voice, /transcription, /call-status, SMS, skambučio nutraukimas, Pinggy tunelis kūrimui), `public/phone/` (aukos ir sukčiaus puslapiai, gyvas smegenų skydelis).
+- `src/brain/`: Claude Haiku 5.5 išskiria faktus (kas skambina, ko prašo, koks spaudimas), `rules.ts` paverčia juos rizika. Įrodymai (prašymai) niekada nemažėja, įtarimas gali kristi. 5 lygis tik prašant kodų / PIN / prisijungimų / nuotolinės prieigos; 3 lygis – prašant pinigų / grynųjų / slaptumo arba 2 kartus iš eilės aukštas įtarimas.
+- `GET /events` (SSE) veikia.
+- `npm run eval` – 9 testiniai skambučiai (sukčiai ir tikri skambučiai), visi praeina. `npm run replay` – dashboardo scenarijai per smegenis.
+
+Paleidimas: `cp .env.example .env`, užpildyti Twilio ir `ANTHROPIC_API_KEY`, `npm install`, `npm start` – konsolėje bus aukos ir sukčiaus nuorodos.
+
 ## Dabartinė būsena
 
 ### Padaryta

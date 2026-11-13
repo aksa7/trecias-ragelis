@@ -1,0 +1,48 @@
+import 'dotenv/config';
+import path from 'node:path';
+import Fastify from 'fastify';
+import formbody from '@fastify/formbody';
+import fastifyStatic from '@fastify/static';
+import { bus } from './events';
+import { startBrain } from './brain';
+import { registerEventStream } from './brain/eventStream';
+import { registerTelephony } from './telephony';
+import { openDevTunnel } from './telephony/tunnel';
+
+const PORT = Number(process.env.PORT ?? 3000);
+
+/** PUBLIC_HOST may be a bare host (abc.up.railway.app) or a full URL. */
+function toPublicUrl(host: string): string {
+  const url = host.startsWith('http') ? host : `https://${host}`;
+  return url.replace(/\/$/, '');
+}
+
+async function main() {
+  const app = Fastify();
+  await app.register(formbody);
+  await app.register(fastifyStatic, { root: path.join(__dirname, '..', 'public') });
+
+  // Log every event so the console shows the whole call.
+  bus.on((event) => console.log('[event]', JSON.stringify(event)));
+  registerEventStream(app);
+  startBrain();
+
+  const telephony = await registerTelephony(app);
+  await app.listen({ port: PORT, host: '0.0.0.0' });
+
+  const onPublicUrl = async (url: string) => {
+    await telephony.setPublicUrl(url);
+    console.log('\nServer ready.');
+    console.log(`  Victim page:  ${url}/phone/victim.html  (open first, press "Go online")`);
+    console.log(`  Scammer page: ${url}/phone/scammer.html`);
+  };
+
+  // Deployed: PUBLIC_HOST is the stable address. Local: open a temporary tunnel.
+  if (process.env.PUBLIC_HOST) await onPublicUrl(toPublicUrl(process.env.PUBLIC_HOST));
+  else openDevTunnel(PORT, (url) => void onPublicUrl(url));
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scammer's phone</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="/sdk/twilio.min.js"></script>
+</head>
+<body>
+<main>
+  <h1>🕵️ Scammer's phone</h1>
+  <p class="sub">Calls the victim</p>
+  <div id="status">Ready</div>
+  <div id="quality"></div>
+  <button id="call" class="green">Call victim</button>
+  <button id="mute" class="grey" hidden>Mute</button>
+  <button id="hangup" class="red" hidden>Hang up</button>
+</main>
+<script type="module">
+  import { createDevice, setStatus, watchQuality } from "./phone.js";
+
+  const $ = (id) => document.getElementById(id);
+  const idle = (text) => {
+    setStatus(text);
+    $("call").hidden = false;
+    $("mute").hidden = true;
+    $("hangup").hidden = true;
+  };
+  let phone;
+
+  $("call").onclick = async () => {
+    setStatus("Calling…", "ringing");
+    $("call").hidden = true;
+    try {
+      phone ??= await createDevice("scammer");
+      const call = await phone.device.connect({ params: { To: "victim" }, rtcConfiguration: phone.rtcConfiguration });
+      watchQuality(call);
+      $("mute").textContent = "Mute";
+      $("mute").hidden = false;
+      $("hangup").hidden = false;
+      $("hangup").onclick = () => call.disconnect();
+      $("mute").onclick = () => {
+        call.mute(!call.isMuted());
+        $("mute").textContent = call.isMuted() ? "Unmute" : "Mute";
+      };
+      call.on("accept", () => setStatus("Connected", "ok"));
+      call.on("disconnect", () => idle("Call ended"));
+      call.on("cancel", () => idle("Call cancelled"));
+      call.on("error", (err) => setStatus(`Error ${err.code ?? ""}: ${err.message}`, "error"));
+    } catch (err) {
+      setStatus(err.message, "error");
+      $("call").hidden = false;
+    }
+  };
+</script>
+</body>
+</html>

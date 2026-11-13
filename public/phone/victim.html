@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Victim's phone</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="/sdk/twilio.min.js"></script>
+</head>
+<body>
+<main class="wide">
+  <section class="phone">
+    <h1>👵 Victim's phone</h1>
+    <p class="sub">Receives the call</p>
+    <div id="status">Offline</div>
+    <div id="quality"></div>
+    <button id="online" class="blue">Go online</button>
+    <button id="answer" class="green" hidden>Answer</button>
+    <button id="decline" class="red" hidden>Decline</button>
+    <button id="mute" class="grey" hidden>Mute</button>
+    <button id="hangup" class="red" hidden>Hang up</button>
+    <label class="toggle"><input type="checkbox" id="auto-answer"> Answer automatically</label>
+    <label class="toggle"><input type="checkbox" id="start-muted"> Start muted (no echo when testing alone)</label>
+  </section>
+  <section id="live" class="live"></section>
+</main>
+<script type="module">
+  import { createDevice, setStatus, watchQuality } from "./phone.js";
+  import { startLivePanel } from "./live.js";
+
+  const $ = (id) => document.getElementById(id);
+  const BUTTONS = ["online", "answer", "decline", "mute", "hangup"];
+  const show = (...ids) => BUTTONS.forEach((id) => ($(id).hidden = !ids.includes(id)));
+
+  // When the guardian cuts a scam call, tell the victim calmly why the line went silent.
+  let cutNotice = null;
+  startLivePanel($("live"), {
+    onAction: (e) => {
+      if (e.kind === "intervention" && currentCall) cutNotice = "Skambutis nutrauktas: tai galėjo būti sukčiai. Jūsų artimieji jau informuoti.";
+    },
+  });
+
+  // Remember the checkbox choices between reloads.
+  for (const id of ["auto-answer", "start-muted"]) {
+    try { $(id).checked = localStorage.getItem(id) === "1"; } catch {}
+    $(id).onchange = () => {
+      try { localStorage.setItem(id, $(id).checked ? "1" : "0"); } catch {}
+    };
+  }
+
+  let device;
+  let rtcConfiguration;
+  let currentCall = null;
+
+  const waiting = () => {
+    currentCall = null;
+    if (cutNotice) {
+      setStatus(cutNotice, "ringing");
+      cutNotice = null;
+    } else {
+      setStatus("Online, waiting for a call", "ok");
+    }
+    show();
+  };
+
+  function handleIncoming(call) {
+    // A new call always wins: a call still marked open here is a leftover (e.g. one the
+    // guardian cut), so drop it instead of answering "busy".
+    if (currentCall && currentCall.status() !== "closed") {
+      console.warn("Dropping leftover call", currentCall.status());
+      currentCall.disconnect();
+    }
+    currentCall = call;
+    watchQuality(call);
+
+    call.on("accept", () => {
+      if ($("start-muted").checked) call.mute(true);
+      setStatus(call.isMuted() ? "In call (muted)" : "In call", "ok");
+      $("mute").textContent = call.isMuted() ? "Unmute" : "Mute";
+      show("mute", "hangup");
+    });
+    call.on("disconnect", waiting);
+    call.on("cancel", waiting);
+    call.on("reject", waiting);
+    call.on("error", (err) => setStatus(`Call error ${err.code ?? ""}: ${err.message}`, "error"));
+
+    $("answer").onclick = () => call.accept({ rtcConfiguration });
+    $("decline").onclick = () => call.reject();
+    $("hangup").onclick = () => call.disconnect();
+    $("mute").onclick = () => {
+      call.mute(!call.isMuted());
+      $("mute").textContent = call.isMuted() ? "Unmute" : "Mute";
+      setStatus(call.isMuted() ? "In call (muted)" : "In call", "ok");
+    };
+
+    if ($("auto-answer").checked) {
+      call.accept({ rtcConfiguration });
+    } else {
+      setStatus(`📞 Incoming call from ${call.parameters.From}`, "ringing");
+      show("answer", "decline");
+    }
+  }
+
+  // "Go online" needs a click so the browser allows the ringtone and microphone.
+  $("online").onclick = async () => {
+    setStatus("Connecting…");
+    try {
+      ({ device, rtcConfiguration } = await createDevice("victim", { allowIncomingWhileBusy: true }));
+      device.on("registered", () => { if (!currentCall) waiting(); });
+      device.on("incoming", handleIncoming);
+      // If the connection drops (sleep, network), log back in instead of silently going offline.
+      device.on("unregistered", () => {
+        setStatus("Reconnecting…", "ringing");
+        setTimeout(() => device.register().catch((err) => setStatus(err.message, "error")), 1000);
+      });
+      await device.register();
+    } catch (err) {
+      setStatus(err.message, "error");
+    }
+  };
+</script>
+</body>
+</html>

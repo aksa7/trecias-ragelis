@@ -1,0 +1,63 @@
+// What telephony does when the brain raises the level. No voice warnings to the victim
+// (a scared person can panic); the family is told by SMS and handles it.
+//   level 3 → SMS to the family
+//   level 5 → the call is cut immediately, then SMS to the family again
+//   after a level 3+ call → the summary; if the risk had dropped back below 50 by the end
+//                           (nothing was really asked), a calming "probably fine" message instead
+import type { Twilio } from 'twilio';
+import { bus, type Level } from '../events';
+import { familyContacts, textFamily } from './sms';
+
+// The protected person as used in the texts: name in dative ("Mamai") and gender for "jai" / "jam".
+const VICTIM = process.env.VICTIM_NAME ?? 'Jūsų artimajam';
+const HIM_OR_HER = { f: 'jai', m: 'jam' }[process.env.VICTIM_GENDER ?? ''] ?? 'jam ar jai';
+
+const highestLevel = new Map<string, Level>();
+const lastRisk = new Map<string, number>();
+const callSidOf = (room: string) => room.replace(/^room-/, '');
+const sentence = (reason: string) => reason.trim().replace(/[.!\s]+$/, '');
+
+export function startActions(client: Twilio, messagingServiceSid: string | null) {
+  if (familyContacts().length === 0) console.warn('[actions] FAMILY_CONTACTS is empty: no SMS will be sent.');
+
+  // SMS_ENABLED=false while testing: actions still show on the live panel, nothing is texted.
+  const smsEnabled = process.env.SMS_ENABLED !== 'false';
+  if (!smsEnabled) console.warn('[actions] SMS_ENABLED=false: texts are only shown, not sent.');
+
+  const sms = async (room: string, body: string) => {
+    if (!smsEnabled) {
+      bus.emit({ type: 'action', room, kind: 'family_sms', text: `(SMS išjungta) „${body}“` });
+      return;
+    }
+    const sent = messagingServiceSid ? await textFamily(client, messagingServiceSid, body) : [];
+    const to = sent.length ? sent.map((c) => c.name).join(', ') : 'niekam (SMS neišsiųsta)';
+    bus.emit({ type: 'action', room, kind: 'family_sms', text: `SMS → ${to}: „${body}“` });
+  };
+
+  bus.on((event) => {
+    if (event.type === 'risk') {
+      lastRisk.set(event.room, event.score);
+    } else if (event.type === 'level') {
+      highestLevel.set(event.room, event.level);
+      if (event.level === 3) {
+        void sms(event.room, `BustedAI: ${VICTIM} skambina galimas sukčius. ${sentence(event.reason)}. Paskambinkite ${HIM_OR_HER}.`);
+      }
+      if (event.level === 5) void intervene(event.room, event.reason);
+    } else if (event.type === 'summary' && (highestLevel.get(event.room) ?? 1) >= 3) {
+      const calmedDown = highestLevel.get(event.room) === 3 && (lastRisk.get(event.room) ?? 0) < 50;
+      const prefix = calmedDown ? 'BustedAI: skambutis baigėsi be pavojingų prašymų, tikėtina, kad viskas gerai.' : 'BustedAI:';
+      void sms(event.room, `${prefix} ${event.text}`);
+    }
+  });
+
+  async function intervene(room: string, reason: string) {
+    // Cut first: every second on the line is a chance to read out a code.
+    try {
+      await client.calls(callSidOf(room)).update({ status: 'completed' });
+      bus.emit({ type: 'action', room, kind: 'intervention', text: `Skambutis nutrauktas: ${reason}` });
+    } catch (err) {
+      console.error('[actions] Could not end the call:', err instanceof Error ? err.message : err);
+    }
+    await sms(room, `BustedAI: skambutis ${VICTIM} NUTRAUKTAS. ${sentence(reason)}. Paskambinkite ${HIM_OR_HER} dabar.`);
+  }
+}
