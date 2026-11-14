@@ -2,6 +2,7 @@
 // Only asks, not mentions: "kažkas bando pervesti" (someone tries to transfer) is a story, Claude judges it;
 // "perveskite" (transfer it) is a request. Patterns use Lithuanian word stems with Unicode letters,
 // so endings and small transcription errors still match.
+import { say } from '../language';
 
 export interface KeywordHit {
   floor: number;
@@ -14,24 +15,24 @@ interface Rule extends KeywordHit {
 
 // Requests no real bank, police or courier ever makes: level 5.
 const CRITICAL: Rule[] = [
-  { pattern: /smart[\s-]?id|mobile[\s-]?id/iu, floor: 85, reason: 'Prašo Smart-ID / Mobile-ID kodo' },
-  { pattern: /(?<!\p{L})pin(?!\p{L}{3})/iu, floor: 85, reason: 'Prašo PIN kodo' },
-  { pattern: /slaptaž/iu, floor: 85, reason: 'Prašo slaptažodžio' },
-  { pattern: /prisijungim\p{L}* (duomen|vard)|vartotojo vard/iu, floor: 85, reason: 'Prašo prisijungimo duomenų' },
-  { pattern: /(?<!\p{L})(cvv|cvc)(?!\p{L})|kortel\p{L}* numer/iu, floor: 85, reason: 'Prašo kortelės duomenų' },
-  { pattern: /any\s?desk|team\s?viewer|nuotolin\p{L}* prieig/iu, floor: 85, reason: 'Prašo įdiegti nuotolinės prieigos programą' },
+  { pattern: /smart[\s-]?id|mobile[\s-]?id/iu, floor: 85, reason: say('Prašo Smart-ID / Mobile-ID kodo', 'Asks for the Smart-ID / Mobile-ID code') },
+  { pattern: /(?<!\p{L})pin(?!\p{L}{3})/iu, floor: 85, reason: say('Prašo PIN kodo', 'Asks for the PIN') },
+  { pattern: /slaptaž/iu, floor: 85, reason: say('Prašo slaptažodžio', 'Asks for a password') },
+  { pattern: /prisijungim\p{L}* (duomen|vard)|vartotojo vard/iu, floor: 85, reason: say('Prašo prisijungimo duomenų', 'Asks for login details') },
+  { pattern: /(?<!\p{L})(cvv|cvc)(?!\p{L})|kortel\p{L}* numer/iu, floor: 85, reason: say('Prašo kortelės duomenų', 'Asks for card details') },
+  { pattern: /any\s?desk|team\s?viewer|nuotolin\p{L}* prieig/iu, floor: 85, reason: say('Prašo įdiegti nuotolinės prieigos programą', 'Asks to install a remote access app') },
   {
     pattern: /(pasakyk|padiktuok|perskaityk|nurodyk|atsiųsk|įvesk)\p{L}*.*kod|(?<!\p{L})kod\p{L}*.*(sms|žinut|patvirtin)/iu,
     floor: 85,
-    reason: 'Prašo pasakyti patvirtinimo kodą',
+    reason: say('Prašo pasakyti patvirtinimo kodą', 'Asks for a confirmation code'),
   },
 ];
 
 // Money and secrecy requests: level 3.
 const ELEVATED: Rule[] = [
-  { pattern: /saug\p{L}* sąskait/iu, floor: 60, reason: 'Siūlo „saugią sąskaitą“' },
-  { pattern: /(pervesk|perkelk|pervedinėk)\p{L}*|atiduok\p{L}* (pinig|gryn)/iu, floor: 60, reason: 'Prašo pervesti ar atiduoti pinigus' },
-  { pattern: /niekam nesakyk|nesakykite niekam|niekam nepasakok/iu, floor: 55, reason: 'Prašo niekam nesakyti' },
+  { pattern: /saug\p{L}* sąskait/iu, floor: 60, reason: say('Siūlo „saugią sąskaitą“', 'Offers a “safe account”') },
+  { pattern: /(pervesk|perkelk|pervedinėk)\p{L}*|atiduok\p{L}* (pinig|gryn)/iu, floor: 60, reason: say('Prašo pervesti ar atiduoti pinigus', 'Asks to transfer or hand over money') },
+  { pattern: /niekam nesakyk|nesakykite niekam|niekam nepasakok/iu, floor: 55, reason: say('Prašo niekam nesakyti', 'Asks her to tell no one') },
 ];
 
 // A real bank warns: "niekada nesakykite Smart-ID kodo". Lines with these words are a warning, not a request.

@@ -12,6 +12,7 @@
 //            or suspicion >= 50 in CONFIRMATIONS assessments in a row - one spike is not enough
 // Once reached, a level stays.
 import { bus, type CallEvent, type Level } from '../events';
+import { say } from '../language';
 import { matchKeywords, victimSaysDigits } from './keywords';
 import { judge } from './rules';
 import { extractFacts, summarizeCall, type Line } from './scorer';
@@ -128,7 +129,7 @@ function onTranscript(room: string, line: Line) {
   const hit = line.role === 'scammer' ? matchKeywords(line.text) : null;
   if (hit) addEvidence(call, hit.floor, hit.reason);
   if (line.role === 'victim' && call.evidence >= 80 && victimSaysDigits(line.text)) {
-    addEvidence(call, 95, 'Auka pradeda sakyti kodą');
+    addEvidence(call, 95, say('Auka pradeda sakyti kodą', 'The code is being read out'));
   }
   if (hit || call.evidence >= 95) update(room, call);
 
@@ -157,7 +158,7 @@ export function startBrain() {
   function handle(event: CallEvent) {
     if (event.type === 'call_started') {
       callFor(event.room);
-      bus.emit({ type: 'level', room: event.room, level: 1, reason: 'Skambutis stebimas' });
+      bus.emit({ type: 'level', room: event.room, level: 1, reason: say('Skambutis stebimas', 'Call monitored') });
     } else if (event.type === 'transcript') {
       onTranscript(event.room, { role: event.role, text: event.text });
     } else if (event.type === 'call_ended') {

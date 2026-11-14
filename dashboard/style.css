@@ -1,6 +1,6 @@
 /* Calm editorial look: off-white paper, sans text, monospace labels, thin rules.
    body[data-level] is 1, 3 or 5. The page always fits one screen. The newest transcript line stays
-   at a fixed height: the log has reserved space below it and banners float over the top. */
+   at a fixed height: the log has reserved space below it, and an open banner takes room from the top. */
 :root {
   --paper: #f8f7f4;
   --ink: #1d1b1a;
@@ -63,14 +63,10 @@ body.on-air .live-label::before {
 @keyframes pulse { 50% { opacity: 0.3; } }
 .timer { font-size: 1.6em; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-/* ---------- Banner: edge to edge, shown 3–4 s, then collapses into the log ----------
-   It floats over the (faded) top of the transcript instead of pushing it down. */
-.banner-slot { position: relative; height: 0; z-index: 5; }
+/* ---------- Banner: edge to edge, stays open until the next call (also listed in the log) ----------
+   It sits in the page flow, so it takes room from the transcript instead of covering the meter. */
+.banner-slot { flex: none; }
 .banner {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 0.45s ease;
@@ -159,7 +155,9 @@ body.on-air .live-label::before {
   height: calc(3 * 1.75em + 1.6vh);
   box-sizing: content-box;
 }
-.log li { display: flex; align-items: baseline; gap: 0.6em; padding: 0.25em 0; animation: rise 0.4s ease-out; white-space: pre; }
+.log li { display: flex; align-items: baseline; gap: 0.6em; padding: 0.25em 0; animation: rise 0.4s ease-out; white-space: pre; min-width: 0; }
+.log .detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 400; opacity: 0.8; }
+.log .detail:not(:empty)::before { content: "—  "; }
 .log .check { margin-right: 0.5em; }
 .log .time { font-family: var(--mono); }
 .log li.cut { color: var(--crimson-text); font-weight: 600; }

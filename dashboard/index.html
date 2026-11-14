@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="lt">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,14 +12,14 @@
 <body data-level="1">
   <header class="masthead">
     <span class="logo">GETBUSTED</span>
-    <span class="ready">Pasiruošta</span>
+    <span class="ready">Ready</span>
     <div class="status">
-      <span id="live-label" class="live-label">LAUKIAMA</span>
+      <span id="live-label" class="live-label">WAITING</span>
       <span id="timer" class="timer">00:00</span>
     </div>
   </header>
 
-  <!-- The banner floats over the top of the transcript, so opening it never moves the text. -->
+  <!-- The banner opens under the header and stays until the next call; the transcript makes room for it. -->
   <div class="banner-slot">
     <div id="banner" class="banner" aria-live="assertive">
       <div class="banner-inner">
@@ -41,8 +41,8 @@
         </svg>
         <span class="idle-dot"></span>
       </span>
-      <h2>Laukiama skambučio</h2>
-      <p>Pokalbio analizė prasidės automatiškai.</p>
+      <h2>Waiting for a call</h2>
+      <p>Call analysis starts automatically.</p>
     </section>
 
     <!-- Live call: transcript on the left, risk meter on the right -->
@@ -67,7 +67,7 @@
         </svg>
         <div class="meter-center">
           <span id="meter-value" class="meter-value">0</span>
-          <span id="meter-state" class="meter-state">Viskas gerai</span>
+          <span id="meter-state" class="meter-state">All good</span>
         </div>
         <span id="meter-delta" class="meter-delta"></span>
       </div>

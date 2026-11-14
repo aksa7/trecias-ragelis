@@ -1,6 +1,6 @@
 // Live call view (a showcase: the calls themselves happen on the phones; this page only waits and
 // shows them). render() reads the `call` object from state.js. SMS and call-cut actions show as a
-// full-width banner for a few seconds, then move to the event log.
+// full-width banner that stays until the next call (a cut outranks an SMS) and in the event log below.
 // Open with ?demo for a scripted call that plays on a loop, ?replay to replay the last real call
 // (?replay=<name> for a specific one from recordings/), ?static for no animations.
 import { applyEvent, emptyCall } from "./state.js";
@@ -16,32 +16,13 @@ const DEMO = params.has("demo");
 if (DEMO && !params.has("embedded") && window === window.top) location.replace(`demo.html${location.search}`);
 const REPLAY = params.has("replay") ? params.get("replay") || "latest" : null;
 
-const BANNER_MS = 3500;
-// The demo call is in English (for the pitch); live calls and replays are in Lithuanian.
-const TEXT = DEMO
-  ? {
-      speakers: { scammer: "CALLER", victim: "GRANDMA" },
-      states: { 1: "All good", 3: "Suspicious", 5: "Scammer" },
-      cut: "Call cut",
-      sms: "SMS sent to family",
-      live: { waiting: "WAITING", live: "LIVE", cut: "CUT", ended: "ENDED" },
-      ready: "Ready",
-      waitingTitle: "Waiting for a call",
-      waitingHint: "Call analysis starts automatically.",
-    }
-  : {
-      speakers: { scammer: "SKAMBINANTYSIS", victim: "PAŠNEKOVAS" },
-      states: { 1: "Viskas gerai", 3: "Įtartina", 5: "Sukčius" },
-      cut: "Skambutis nutrauktas",
-      sms: "Artimiesiems išsiųstas SMS",
-      live: { waiting: "LAUKIAMA", live: "TIESIOGIAI", cut: "NUTRAUKTAS", ended: "BAIGTAS" },
-    };
-if (DEMO) {
-  document.documentElement.lang = "en";
-  document.querySelector(".ready").textContent = TEXT.ready;
-  document.querySelector(".idle-panel h2").textContent = TEXT.waitingTitle;
-  document.querySelector(".idle-panel p").textContent = TEXT.waitingHint;
-}
+const TEXT = {
+  speakers: { scammer: "CALLER", victim: "GRANDMA" },
+  states: { 1: "All good", 3: "Suspicious", 5: "Scammer" },
+  cut: "Call cut",
+  sms: "SMS sent to family",
+  live: { waiting: "WAITING", live: "LIVE", cut: "CUT", ended: "ENDED" },
+};
 const ICONS = {
   // phone handset, hung up (outline)
   cut: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"><path d="M32 24c-10 0-19 3-25 8-2 2-2 4 0 6l3 3c2 2 4 2 6 0l4-3c1-1 2-2 2-4v-3c3-1 7-1 10-1s7 0 10 1v3c0 2 1 3 2 4l4 3c2 2 4 2 6 0l3-3c2-2 2-4 0-6-6-5-15-8-25-8z"/></svg>`,
@@ -76,11 +57,7 @@ const $ = (id) => document.getElementById(id);
 let call = emptyCall();
 let seenRoom = null;
 let seenLines = 0;
-let seenActions = 0;
-let liveFeed = false; // false while the server replays history on connect: old actions go straight to the log
-const bannerQueue = [];
-let bannerBusy = false;
-const logged = [];
+let bannerKey = "";
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -127,37 +104,34 @@ function describe(action) {
   return { style: cut ? "cut" : "sms", title: cut ? TEXT.cut : TEXT.sms, detail: reason, at: action.at };
 }
 
-/** Shows queued banners one at a time; each moves to the event log when it closes. */
-function showNextBanner() {
-  if (bannerBusy || !bannerQueue.length) return;
-  bannerBusy = true;
-  const item = bannerQueue.shift();
+/** The banner shows the most serious action so far (a cut over an SMS) and stays open. */
+function renderBanner(items) {
+  const item = items.findLast((i) => i.style === "cut") ?? items.at(-1);
+  const key = item ? `${item.style}:${item.at}` : "";
+  if (key === bannerKey) return;
+  bannerKey = key;
+  $("banner").classList.toggle("open", Boolean(item));
+  if (!item) return;
   $("banner").className = `banner ${item.style}`;
   $("banner-icon").innerHTML = ICONS[item.style];
   $("banner-title").textContent = item.title;
   $("banner-detail").textContent = item.detail;
-  // Open right away (not on the next animation frame: background tabs delay those, and a late
-  // "open" could land after the close). Reading offsetHeight first lets the slide-in animate.
+  // Reading offsetHeight first lets the slide-in animate even when the class was just reset.
   void $("banner").offsetHeight;
   $("banner").classList.add("open");
-
-  setTimeout(() => {
-    $("banner").classList.remove("open");
-    logged.push(item);
-    renderLog();
-    setTimeout(() => {
-      bannerBusy = false;
-      showNextBanner();
-    }, 500);
-  }, BANNER_MS);
 }
 
-function renderLog() {
+function renderLog(items) {
   // Only the last few, so the log never pushes the page past one screen.
   $("log").replaceChildren(
-    ...logged.slice(-3).map((item) => {
+    ...items.slice(-3).map((item) => {
       const li = el("li", item.style);
-      li.append(el("span", "check", "✓"), el("span", "time", clock(item.at)), el("span", "", `·  ${item.title}`));
+      li.append(
+        el("span", "check", "✓"),
+        el("span", "time", clock(item.at)),
+        el("span", "title", `·  ${item.title}`),
+        el("span", "detail", item.detail),
+      );
       return li;
     }),
   );
@@ -207,11 +181,7 @@ function render() {
   if (call.room !== seenRoom) {
     seenRoom = call.room;
     seenLines = 0;
-    seenActions = 0;
     meterRisk = 0;
-    bannerQueue.length = 0;
-    logged.length = 0;
-    renderLog();
   }
   const live = Boolean(call.room && !call.endedAt);
   const cut = call.actions.some((a) => a.kind === "intervention");
@@ -244,14 +214,9 @@ function render() {
   );
   seenLines = call.lines.length;
 
-  for (const action of call.actions.slice(seenActions)) {
-    if (action.kind !== "intervention" && action.kind !== "family_sms") continue;
-    if (liveFeed) bannerQueue.push(describe(action));
-    else logged.push(describe(action));
-  }
-  if (!liveFeed) renderLog();
-  seenActions = call.actions.length;
-  showNextBanner();
+  const alerts = call.actions.filter((a) => a.kind === "intervention" || a.kind === "family_sms").map(describe);
+  renderBanner(alerts);
+  renderLog(alerts);
 
   $("summary").textContent = call.summary ?? "";
 }
@@ -281,7 +246,6 @@ setInterval(tick, 500);
 
 if (DEMO || REPLAY) {
   // Demo / replay: waiting screen, the call, back to waiting, and again.
-  liveFeed = true;
   const play = REPLAY
     ? await loadRecording(REPLAY).then(
         (script) => (onDone) => playScript(script, onEvent, onDone),
@@ -298,6 +262,4 @@ if (DEMO || REPLAY) {
   // Live: the call is made on the phones; this page waits for it and shows it.
   const events = new EventSource("/events");
   events.onmessage = (message) => onEvent(JSON.parse(message.data));
-  events.addEventListener("live", () => (liveFeed = true)); // history replay is over
-  events.onerror = () => (liveFeed = false); // on reconnect the server replays history again
 }

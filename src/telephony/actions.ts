@@ -6,11 +6,14 @@
 //                           (nothing was really asked), a calming "probably fine" message instead
 import type { Twilio } from 'twilio';
 import { bus, type Level } from '../events';
+import { say } from '../language';
 import { familyContacts, textFamily } from './sms';
 
-// The protected person as used in the texts: name in dative ("Mamai") and gender for "jai" / "jam".
-const VICTIM = process.env.VICTIM_NAME ?? 'Jūsų artimajam';
-const HIM_OR_HER = { f: 'jai', m: 'jam' }[process.env.VICTIM_GENDER ?? ''] ?? 'jam ar jai';
+// The protected person as used in the texts: in Lithuanian the name in dative ("Mamai"), in English
+// VICTIM_NAME_EN ("Mum"); the gender gives "jai" / "jam" and "her" / "him".
+const GENDER = process.env.VICTIM_GENDER ?? '';
+const VICTIM = say(process.env.VICTIM_NAME ?? 'Jūsų artimajam', process.env.VICTIM_NAME_EN ?? 'your relative');
+const HIM_OR_HER = say({ f: 'jai', m: 'jam' }[GENDER] ?? 'jam ar jai', { f: 'her', m: 'him' }[GENDER] ?? 'them');
 
 const highestLevel = new Map<string, Level>();
 const lastRisk = new Map<string, number>();
@@ -26,12 +29,12 @@ export function startActions(client: Twilio, messagingServiceSid: string | null)
 
   const sms = async (room: string, body: string) => {
     if (!smsEnabled) {
-      bus.emit({ type: 'action', room, kind: 'family_sms', text: `(SMS išjungta) „${body}“` });
+      bus.emit({ type: 'action', room, kind: 'family_sms', text: `${say('(SMS išjungta)', '(SMS off)')} “${body}”` });
       return;
     }
     const sent = messagingServiceSid ? await textFamily(client, messagingServiceSid, body) : [];
-    const to = sent.length ? sent.map((c) => c.name).join(', ') : 'niekam (SMS neišsiųsta)';
-    bus.emit({ type: 'action', room, kind: 'family_sms', text: `SMS → ${to}: „${body}“` });
+    const to = sent.length ? sent.map((c) => c.name).join(', ') : say('niekam (SMS neišsiųsta)', 'nobody (SMS not sent)');
+    bus.emit({ type: 'action', room, kind: 'family_sms', text: `SMS → ${to}: “${body}”` });
   };
 
   bus.on((event) => {
@@ -40,12 +43,20 @@ export function startActions(client: Twilio, messagingServiceSid: string | null)
     } else if (event.type === 'level') {
       highestLevel.set(event.room, event.level);
       if (event.level === 3) {
-        void sms(event.room, `BustedAI: ${VICTIM} skambina galimas sukčius. ${sentence(event.reason)}. Paskambinkite ${HIM_OR_HER}.`);
+        void sms(
+          event.room,
+          say(
+            `BustedAI: ${VICTIM} skambina galimas sukčius. ${sentence(event.reason)}. Paskambinkite ${HIM_OR_HER}.`,
+            `BustedAI: a possible scammer is calling ${VICTIM}. ${sentence(event.reason)}. Please call ${HIM_OR_HER}.`,
+          ),
+        );
       }
       if (event.level === 5) void intervene(event.room, event.reason);
     } else if (event.type === 'summary' && (highestLevel.get(event.room) ?? 1) >= 3) {
       const calmedDown = highestLevel.get(event.room) === 3 && (lastRisk.get(event.room) ?? 0) < 50;
-      const prefix = calmedDown ? 'BustedAI: skambutis baigėsi be pavojingų prašymų, tikėtina, kad viskas gerai.' : 'BustedAI:';
+      const prefix = calmedDown
+        ? say('BustedAI: skambutis baigėsi be pavojingų prašymų, tikėtina, kad viskas gerai.', 'BustedAI: the call ended without dangerous requests, it is probably fine.')
+        : 'BustedAI:';
       void sms(event.room, `${prefix} ${event.text}`);
     }
   });
@@ -54,10 +65,16 @@ export function startActions(client: Twilio, messagingServiceSid: string | null)
     // Cut first: every second on the line is a chance to read out a code.
     try {
       await client.calls(callSidOf(room)).update({ status: 'completed' });
-      bus.emit({ type: 'action', room, kind: 'intervention', text: `Skambutis nutrauktas: ${reason}` });
+      bus.emit({ type: 'action', room, kind: 'intervention', text: `${say('Skambutis nutrauktas', 'Call cut')}: ${reason}` });
     } catch (err) {
       console.error('[actions] Could not end the call:', err instanceof Error ? err.message : err);
     }
-    await sms(room, `BustedAI: skambutis ${VICTIM} NUTRAUKTAS. ${sentence(reason)}. Paskambinkite ${HIM_OR_HER} dabar.`);
+    await sms(
+      room,
+      say(
+        `BustedAI: skambutis ${VICTIM} NUTRAUKTAS. ${sentence(reason)}. Paskambinkite ${HIM_OR_HER} dabar.`,
+        `BustedAI: the call to ${VICTIM} was CUT. ${sentence(reason)}. Call ${HIM_OR_HER} now.`,
+      ),
+    );
   }
 }

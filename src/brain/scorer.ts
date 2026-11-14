@@ -3,6 +3,7 @@
 // It does not decide the risk score; src/brain/rules.ts turns these facts into a score.
 import Anthropic from '@anthropic-ai/sdk';
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
+import { ENGLISH, say } from '../language';
 
 export interface Line {
   role: 'scammer' | 'victim';
@@ -66,7 +67,7 @@ legit_cues: informs_only = the CALLER only informs and asks for nothing; institu
   a branch; routine_logistics = ordinary delivery or appointment talk; known_relationship = the RECIPIENT clearly knows
   the caller (not just someone claiming to be a relative from a new number).
 victim_state: how the RECIPIENT reacts (complying = agrees, looks for codes, reads digits, goes to transfer).
-reason: at most 12 words in Lithuanian for a family member, e.g. "Prisistato banku ir prašo Smart-ID kodo".`;
+reason: at most 12 words ${ENGLISH ? 'in English' : 'in Lithuanian'} for a family member, e.g. "${say('Prisistato banku ir prašo Smart-ID kodo', 'Poses as the bank and asks for the Smart-ID code')}".`;
 
 function formatTranscript(lines: Line[]): string {
   return lines.map((l) => `${l.role === 'scammer' ? 'CALLER' : 'RECIPIENT'}: ${l.text}`).join('\n');
@@ -90,7 +91,7 @@ export async function extractFacts(lines: Line[]): Promise<Facts> {
 
 const SUMMARY_PROMPT = `You write a short report for the family about a phone call to their elderly relative in Lithuania
 that a scam guardian monitored. The transcript comes from speech recognition and may contain misheard words.
-Write at most 2 sentences and 300 characters in Lithuanian, plain text: who the caller claimed to be, what they asked for,
+Write at most 2 sentences and 300 characters ${ENGLISH ? 'in English' : 'in Lithuanian'}, plain text: who the caller claimed to be, what they asked for,
 and what the family should do. Base the tone on what was actually asked:
 - nothing asked: say the call looks normal / like a real institution, and suggest checking via the official number only if in doubt;
 - money or personal data asked: warning signs, call the relative;
