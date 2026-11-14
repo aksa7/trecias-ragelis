@@ -51,9 +51,13 @@ async function main() {
     console.log(`  Dashboard:    ${url}/dashboard/   (demo without calls: ${url}/dashboard/?demo)`);
   };
 
-  // Deployed: PUBLIC_HOST is the stable address. Local: open a temporary tunnel.
-  if (process.env.PUBLIC_HOST) await onPublicUrl(toPublicUrl(process.env.PUBLIC_HOST));
-  else openDevTunnel(PORT, (url) => void onPublicUrl(url));
+  // Deployed: PUBLIC_HOST (or Railway's own domain) is the stable address. Local: open a temporary tunnel.
+  const publicHost = process.env.PUBLIC_HOST || process.env.RAILWAY_PUBLIC_DOMAIN;
+  if (publicHost) await onPublicUrl(toPublicUrl(publicHost));
+  else if (process.env.RAILWAY_ENVIRONMENT) {
+    // No tunnel on a server: it would need ssh, and would take the calls away from the real deployment.
+    console.error('[server] No public address: generate a domain in Railway (Settings → Networking). Calls are off.');
+  } else openDevTunnel(PORT, (url) => void onPublicUrl(url));
 }
 
 main().catch((err) => {

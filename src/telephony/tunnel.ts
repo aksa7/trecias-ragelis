@@ -18,6 +18,8 @@ export function openDevTunnel(port: number, onUrl: (url: string) => void) {
   };
   proc.stdout.on('data', onData);
   proc.stderr.on('data', onData);
+  // Without ssh there is no tunnel; keep the server up (dashboard and ?demo still work).
+  proc.on('error', (err) => console.error('[tunnel] Could not start ssh:', err.message));
   proc.on('exit', () => {
     console.log('\nTunnel closed, reopening…');
     setTimeout(() => openDevTunnel(port, onUrl), 2000);
