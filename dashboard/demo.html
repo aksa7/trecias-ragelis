@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GETBUSTED demo</title>
+  <style>
+    /* Demo stage: the dashboard on the left, laid out as if the browser were that narrow (it is its own page
+       in an iframe), and on the right the family member's phone, where the SMS alerts arrive. The phone side
+       deliberately does not look like the dashboard: it is "the real world" receiving the alerts. */
+    :root {
+      --split: 77vw;
+      --ios: -apple-system, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; height: 100vh; overflow: hidden; display: flex; background: #111; }
+    .screen { flex: none; width: var(--split); height: 100%; border: 0; display: block; background: #f8f7f4; }
+
+    .stage {
+      flex: 1 1 auto;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(120% 80% at 50% 30%, #2a2d36 0%, #121318 70%);
+      font-family: var(--ios);
+      /* everything on the phone scales with it */
+      --phone-h: min(80vh, calc((100vw - var(--split)) * 0.8 * 19.5 / 9));
+      font-size: calc(var(--phone-h) / 52);
+    }
+
+    /* ---------- Phone ---------- */
+    .phone {
+      position: relative;
+      height: var(--phone-h);
+      width: calc(var(--phone-h) * 9 / 19.5);
+      padding: 0.55em;
+      border-radius: 4.6em;
+      background: #1b1c1f;
+      box-shadow: 0 0 0 0.18em #3a3c42, 0 2.5em 5em rgba(0, 0, 0, 0.55);
+    }
+    .phone.buzz { animation: buzz 0.45s linear; }
+    @keyframes buzz {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-0.25em) rotate(-0.4deg); }
+      40%, 80% { transform: translateX(0.25em) rotate(0.4deg); }
+    }
+    .display {
+      position: relative;
+      height: 100%;
+      border-radius: 4.1em;
+      overflow: hidden;
+      color: #fff;
+      background:
+        radial-gradient(90% 60% at 20% 15%, #5b6cff 0%, transparent 60%),
+        radial-gradient(80% 60% at 90% 40%, #c35bd8 0%, transparent 60%),
+        radial-gradient(100% 70% at 40% 100%, #ff8a5c 0%, transparent 60%),
+        #2b2f6b;
+    }
+    .island { position: absolute; top: 1.1em; left: 50%; width: 7.6em; height: 2.3em; transform: translateX(-50%); border-radius: 2em; background: #000; z-index: 3; }
+
+    .statusbar { position: absolute; top: 1.3em; left: 0; right: 0; display: flex; justify-content: space-between; padding: 0 2.3em 0 2.6em; font-size: 1.15em; font-weight: 600; }
+    .statusbar .icons { display: flex; gap: 0.35em; align-items: center; }
+    .statusbar svg { height: 0.85em; display: block; }
+
+    .lock { position: absolute; top: 6.6em; left: 0; right: 0; text-align: center; text-shadow: 0 0.1em 0.6em rgba(0, 0, 0, 0.15); }
+    .lock .padlock { width: 1.3em; height: 1.3em; opacity: 0.9; }
+    .lock .date { margin-top: 0.4em; font-size: 1.55em; font-weight: 600; opacity: 0.92; }
+    .lock .time { font-size: 7.4em; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+
+    /* ---------- Notifications: newest at the bottom, like iOS ---------- */
+    .notifications {
+      position: absolute;
+      left: 0.9em;
+      right: 0.9em;
+      bottom: 8.5em;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6em;
+    }
+    .notification {
+      display: grid;
+      grid-template-columns: 2.9em 1fr;
+      gap: 0.9em;
+      padding: 1.05em 1.1em;
+      border-radius: 1.7em;
+      background: rgba(245, 245, 247, 0.72);
+      -webkit-backdrop-filter: blur(24px) saturate(1.6);
+      backdrop-filter: blur(24px) saturate(1.6);
+      color: #111;
+      box-shadow: 0 0.4em 1.4em rgba(0, 0, 0, 0.12);
+      animation: arrive 0.55s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+    }
+    .notification.older { opacity: 0.86; transform: scale(0.97); transition: opacity 0.4s, transform 0.4s; }
+    @keyframes arrive { from { opacity: 0; transform: translateY(2.5em) scale(0.92); } }
+    .app-icon { width: 2.9em; height: 2.9em; border-radius: 0.75em; background: linear-gradient(#67e27a, #23c043); display: grid; place-items: center; }
+    .app-icon svg { width: 62%; }
+    .notification .head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5em; }
+    .notification .sender { font-size: 1.2em; font-weight: 650; }
+    .notification .when { font-size: 1em; color: rgba(60, 60, 67, 0.6); }
+    .notification .body {
+      margin-top: 0.15em;
+      font-size: 1.15em;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .notification.urgent .sender { color: #c4161c; }
+
+    .quick { position: absolute; bottom: 3.2em; left: 2.8em; right: 2.8em; display: flex; justify-content: space-between; }
+    .quick span { width: 4.1em; height: 4.1em; border-radius: 50%; background: rgba(0, 0, 0, 0.28); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); display: grid; place-items: center; }
+    .quick svg { width: 45%; }
+    .home-bar { position: absolute; bottom: 0.9em; left: 50%; width: 11em; height: 0.42em; transform: translateX(-50%); border-radius: 1em; background: #fff; }
+
+    .caption { margin-top: 1.4em; text-align: center; font-size: 1.25em; color: rgba(255, 255, 255, 0.55); letter-spacing: 0.02em; }
+  </style>
+</head>
+<body>
+  <iframe class="screen" src="./?demo&embedded" allow="autoplay" title="GETBUSTED dashboard"></iframe>
+
+  <section class="stage">
+    <div>
+      <div class="phone" id="phone">
+        <div class="display">
+          <div class="island"></div>
+          <div class="statusbar">
+            <span class="clock" data-clock></span>
+            <span class="icons">
+              <svg viewBox="0 0 18 12" fill="#fff"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+              <svg viewBox="0 0 16 12" fill="#fff"><path d="M8 2.2c2.3 0 4.4.9 6 2.4l1.3-1.4A10.4 10.4 0 0 0 8 .2 10.4 10.4 0 0 0 .7 3.2L2 4.6a8.4 8.4 0 0 1 6-2.4zm0 3.6c1.3 0 2.5.5 3.4 1.3l1.4-1.4A6.8 6.8 0 0 0 8 3.8a6.8 6.8 0 0 0-4.8 1.9l1.4 1.4A4.8 4.8 0 0 1 8 5.8zm0 3.4a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8z"/></svg>
+              <svg viewBox="0 0 27 12" fill="none"><rect x="0.5" y="0.5" width="23" height="11" rx="3" stroke="#fff" opacity="0.5"/><rect x="2" y="2" width="17" height="8" rx="1.8" fill="#fff"/><path d="M25 4v4c.8-.3 1.3-1.1 1.3-2S25.8 4.3 25 4z" fill="#fff" opacity="0.5"/></svg>
+            </span>
+          </div>
+
+          <div class="lock">
+            <svg class="padlock" viewBox="0 0 24 24" fill="#fff"><path d="M7 10V7a5 5 0 0 1 10 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2zm2 0h6V7a3 3 0 0 0-6 0z"/></svg>
+            <div class="date" id="date"></div>
+            <div class="time" data-clock></div>
+          </div>
+
+          <div class="notifications" id="notifications"></div>
+
+          <div class="quick">
+            <span><svg viewBox="0 0 24 24" fill="#fff"><path d="M8 2h8l-1 6h-6zm1 7h6v12a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1zm3 3a1 1 0 0 0-1 1v2a1 1 0 0 0 2 0v-2a1 1 0 0 0-1-1z"/></svg></span>
+            <span><svg viewBox="0 0 24 24" fill="#fff"><path d="M9 4l-1.5 2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4zm3 5a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg></span>
+          </div>
+          <div class="home-bar"></div>
+        </div>
+      </div>
+      <p class="caption">Daughter's phone</p>
+    </div>
+  </section>
+
+  <script>
+    const screen = document.querySelector(".screen");
+    const list = document.getElementById("notifications");
+    const phone = document.getElementById("phone");
+    const BUBBLE = `<svg viewBox="0 0 24 24" fill="#fff"><path d="M12 3C6.5 3 2 6.6 2 11c0 2.4 1.3 4.6 3.4 6-.2 1.3-.9 2.6-1.9 3.5 2-.1 3.8-.8 5.1-1.9 1.1.3 2.2.4 3.4.4 5.5 0 10-3.6 10-8s-4.5-8-10-8z"/></svg>`;
+
+    // Lock-screen clock and date.
+    function tickClock() {
+      const now = new Date();
+      const time = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      document.querySelectorAll("[data-clock]").forEach((el) => (el.textContent = time));
+      document.getElementById("date").textContent = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+    }
+    tickClock();
+    setInterval(tickClock, 1000);
+
+    // Sound may only start after a click: a click anywhere starts the dashboard's voice-over and the phone's ding.
+    let audioContext = null;
+    for (const type of ["pointerdown", "keydown"]) {
+      document.addEventListener(type, () => {
+        screen.contentWindow.postMessage("start-audio", location.origin);
+        audioContext ??= new AudioContext();
+        audioContext.resume();
+      });
+    }
+
+    /** A short two-note "ding", like a message arriving. */
+    function ding() {
+      if (!audioContext || audioContext.state !== "running") return;
+      const start = audioContext.currentTime;
+      for (const [i, freq] of [1318.5, 1760].entries()) {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        const t = start + i * 0.12;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.12, t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+        osc.connect(gain).connect(audioContext.destination);
+        osc.start(t);
+        osc.stop(t + 0.55);
+      }
+    }
+
+    function notify(text, urgent) {
+      for (const old of list.children) old.classList.add("older");
+      const card = document.createElement("div");
+      card.className = `notification${urgent ? " urgent" : ""}`;
+      card.innerHTML = `<span class="app-icon">${BUBBLE}</span><div><div class="head"><span class="sender"></span><span class="when">now</span></div><div class="body"></div></div>`;
+      card.querySelector(".sender").textContent = "GETBUSTED";
+      card.querySelector(".body").textContent = text;
+      list.append(card);
+      while (list.children.length > 2) list.firstElementChild.remove(); // more would cover the clock
+      phone.classList.remove("buzz");
+      void phone.offsetWidth; // restart the buzz animation
+      phone.classList.add("buzz");
+      ding();
+    }
+
+    /** The SMS text itself, from an action like: SMS → Daughter: “GETBUSTED: …” */
+    function smsBody(actionText) {
+      const quoted = actionText.match(/[“"„](.*)[”"“]/);
+      const body = (quoted ? quoted[1] : actionText).replace(/^GETBUSTED:\s*/, "");
+      return body.charAt(0).toUpperCase() + body.slice(1);
+    }
+
+    // The dashboard frame forwards every call event here.
+    window.addEventListener("message", (e) => {
+      if (e.origin !== location.origin || e.data?.kind !== "call-event") return;
+      const event = e.data.event;
+      if (event.type === "call_started") list.replaceChildren();
+      if (event.type === "action" && event.kind === "family_sms") notify(smsBody(event.text), /CUT|NUTRAUKTAS/.test(event.text));
+      if (event.type === "summary") notify(`Call summary: ${event.text}`, false);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="lt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GETBUSTED</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-level="1">
+  <header class="masthead">
+    <span class="logo">GETBUSTED</span>
+    <span class="ready">Pasiruošta</span>
+    <div class="status">
+      <span id="live-label" class="live-label">LAUKIAMA</span>
+      <span id="timer" class="timer">00:00</span>
+    </div>
+  </header>
+
+  <!-- The banner floats over the top of the transcript, so opening it never moves the text. -->
+  <div class="banner-slot">
+    <div id="banner" class="banner" aria-live="assertive">
+      <div class="banner-inner">
+        <span id="banner-icon" class="banner-icon"></span>
+        <div>
+          <div id="banner-title" class="banner-title"></div>
+          <div id="banner-detail" class="banner-detail"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main class="content">
+    <!-- Waiting screen, shown while there is no call -->
+    <section class="idle-panel">
+      <span class="idle-icon">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.5 7.5l4.2 9.4-4.6 3.4c2.6 5.5 6.9 9.9 12.4 12.5l3.4-4.6 9.4 4.2-1.3 6.8c-.3 1.4-1.5 2.4-3 2.3C18.9 40.6 7.4 29.1 6.5 13.1c-.1-1.5.9-2.7 2.3-3z"/>
+        </svg>
+        <span class="idle-dot"></span>
+      </span>
+      <h2>Laukiama skambučio</h2>
+      <p>Pokalbio analizė prasidės automatiškai.</p>
+    </section>
+
+    <!-- Live call: transcript on the left, risk meter on the right -->
+    <section class="transcript">
+      <ol id="lines" class="lines"></ol>
+      <ul id="log" class="log"></ul>
+      <p id="summary" class="summary"></p>
+    </section>
+
+    <aside class="meter">
+      <div class="meter-card">
+        <svg class="meter-ring" viewBox="0 0 120 120">
+          <defs>
+            <linearGradient id="meter-gradient" x1="0" y1="1" x2="1" y2="0">
+              <stop offset="0" class="meter-stop-a" />
+              <stop offset="1" class="meter-stop-b" />
+            </linearGradient>
+          </defs>
+          <circle class="meter-track" cx="60" cy="60" r="46" />
+          <circle id="meter-arc" class="meter-arc" cx="60" cy="60" r="46" />
+          <g id="meter-knob" class="meter-knob"><circle cx="60" cy="14" r="6.5" /></g>
+        </svg>
+        <div class="meter-center">
+          <span id="meter-value" class="meter-value">0</span>
+          <span id="meter-state" class="meter-state">Viskas gerai</span>
+        </div>
+        <span id="meter-delta" class="meter-delta"></span>
+      </div>
+      <!-- Demo stage only: the mascot for the current level, under the meter -->
+      <div class="mascot-card">
+        <video class="mascot" data-level="1" src="mascots/level-1.mp4" muted loop playsinline preload="auto"></video>
+        <video class="mascot" data-level="3" src="mascots/level-3.mp4" muted loop playsinline preload="auto"></video>
+        <video class="mascot" data-level="5" src="mascots/level-5.mp4" muted loop playsinline preload="auto"></video>
+      </div>
+    </aside>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

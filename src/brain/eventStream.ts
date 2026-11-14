@@ -24,6 +24,9 @@ export function registerEventStream(app: FastifyInstance) {
 
     const send = (event: CallEvent) => res.write(`data: ${JSON.stringify(event)}\n\n`);
     history.forEach(send);
+    // Named SSE event (not a CallEvent): tells pages that the catch-up history is over and
+    // everything after this is live, so they don't replay old alerts as if they were new.
+    res.write('event: live\ndata: {}\n\n');
     const off = bus.on(send);
     const ping = setInterval(() => res.write(': ping\n\n'), 15_000); // keeps tunnels from closing it
 

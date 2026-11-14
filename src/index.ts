@@ -1,10 +1,12 @@
 import 'dotenv/config';
+import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import Fastify from 'fastify';
 import formbody from '@fastify/formbody';
 import fastifyStatic from '@fastify/static';
 import { bus } from './events';
 import { startBrain } from './brain';
+import { RECORDINGS_DIR, startRecorder } from './recorder';
 import { registerEventStream } from './brain/eventStream';
 import { registerTelephony } from './telephony';
 import { openDevTunnel } from './telephony/tunnel';
@@ -21,10 +23,21 @@ async function main() {
   const app = Fastify();
   await app.register(formbody);
   await app.register(fastifyStatic, { root: path.join(__dirname, '..', 'public') });
+  await app.register(fastifyStatic, {
+    root: path.join(__dirname, '..', 'dashboard'),
+    prefix: '/dashboard/',
+    decorateReply: false,
+  });
+  mkdirSync(RECORDINGS_DIR, { recursive: true });
+  await app.register(fastifyStatic, { root: RECORDINGS_DIR, prefix: '/recordings/', decorateReply: false });
+
+  // The main address opens the demo dashboard.
+  app.get('/', (_req, reply) => reply.redirect('/dashboard/'));
 
   // Log every event so the console shows the whole call.
   bus.on((event) => console.log('[event]', JSON.stringify(event)));
   registerEventStream(app);
+  startRecorder();
   startBrain();
 
   const telephony = await registerTelephony(app);
@@ -35,6 +48,7 @@ async function main() {
     console.log('\nServer ready.');
     console.log(`  Victim page:  ${url}/phone/victim.html  (open first, press "Go online")`);
     console.log(`  Scammer page: ${url}/phone/scammer.html`);
+    console.log(`  Dashboard:    ${url}/dashboard/   (demo without calls: ${url}/dashboard/?demo)`);
   };
 
   // Deployed: PUBLIC_HOST is the stable address. Local: open a temporary tunnel.
