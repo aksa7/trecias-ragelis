@@ -17,11 +17,12 @@ if (DEMO && !params.has("embedded") && window === window.top) location.replace(`
 const REPLAY = params.has("replay") ? params.get("replay") || "latest" : null;
 
 const TEXT = {
-  speakers: { scammer: "CALLER", victim: "GRANDMA" },
+  speakers: { scammer: "CALLER", victim: "GRANDMA", sender: "SENDER" },
   states: { 1: "Safe", 3: "Suspicious", 5: "Fraud" },
   cut: "Call cut",
+  blocked: "Scam text blocked",
   sms: "SMS sent to family",
-  live: { waiting: "WAITING", live: "LIVE", cut: "CUT", ended: "ENDED" },
+  live: { waiting: "WAITING", live: "LIVE", cut: "CUT", ended: "ENDED", text: "SMS" },
 };
 const ICONS = {
   // phone handset, hung up (outline)
@@ -66,6 +67,9 @@ function el(tag, className, text) {
   return node;
 }
 
+/** A text from the SMS line (shown like a one-line call) rather than a phone call. */
+const isText = () => call.from.startsWith("sms:");
+
 /** "02:31": time since the call started. */
 function clock(at) {
   if (!call.startedAt || !at) return "00:00";
@@ -100,8 +104,9 @@ function textWithMark(text, marked) {
 /** What a banner / log entry says about an action. */
 function describe(action) {
   const reason = call.levelChanges.filter((c) => c.at <= action.at).at(-1)?.reason ?? "";
-  const cut = action.kind === "intervention";
-  return { style: cut ? "cut" : "sms", title: cut ? TEXT.cut : TEXT.sms, detail: reason, at: action.at };
+  const title = { intervention: TEXT.cut, victim_warning: TEXT.blocked }[action.kind] ?? TEXT.sms;
+  const icon = action.kind === "intervention" ? "cut" : "sms";
+  return { style: action.kind === "family_sms" ? "sms" : "cut", icon, title, detail: reason, at: action.at };
 }
 
 /** The banner shows the most serious action so far (a cut over an SMS) and stays open. */
@@ -113,7 +118,7 @@ function renderBanner(items) {
   $("banner").classList.toggle("open", Boolean(item));
   if (!item) return;
   $("banner").className = `banner ${item.style}`;
-  $("banner-icon").innerHTML = ICONS[item.style];
+  $("banner-icon").innerHTML = ICONS[item.icon];
   $("banner-title").textContent = item.title;
   $("banner-detail").textContent = item.detail;
   // Reading offsetHeight first lets the slide-in animate even when the class was just reset.
@@ -186,10 +191,11 @@ function render() {
   const live = Boolean(call.room && !call.endedAt);
   const cut = call.actions.some((a) => a.kind === "intervention");
   document.body.dataset.level = String(call.level);
-  document.body.classList.toggle("on-air", live);
+  document.body.classList.toggle("on-air", live && !isText());
   document.body.classList.toggle("idle", !call.room); // waiting screen until a call starts
 
-  $("live-label").textContent = TEXT.live[live ? "live" : call.room ? (cut ? "cut" : "ended") : "waiting"];
+  const state = isText() ? "text" : live ? "live" : call.room ? (cut ? "cut" : "ended") : "waiting";
+  $("live-label").textContent = TEXT.live[state];
   renderMeter();
   renderMascot();
 
@@ -207,14 +213,14 @@ function render() {
       avatar.src = AVATARS[line.role];
       avatar.alt = "";
       const body = el("div", "body");
-      body.append(el("span", "meta", `${clock(line.at)}  •  ${TEXT.speakers[line.role]}`), textWithMark(line.text, Boolean(level)));
+      body.append(el("span", "meta", `${clock(line.at)}  •  ${TEXT.speakers[isText() ? "sender" : line.role]}`), textWithMark(line.text, Boolean(level)));
       row.append(avatar, body);
       return row;
     }),
   );
   seenLines = call.lines.length;
 
-  const alerts = call.actions.filter((a) => a.kind === "intervention" || a.kind === "family_sms").map(describe);
+  const alerts = call.actions.filter((a) => ["intervention", "victim_warning", "family_sms"].includes(a.kind)).map(describe);
   renderBanner(alerts);
   renderLog(alerts);
 
@@ -222,7 +228,7 @@ function render() {
 }
 
 function tick() {
-  $("timer").textContent = call.room ? clock(call.endedAt ?? new Date()) : "00:00";
+  $("timer").textContent = call.room && !isText() ? clock(call.endedAt ?? new Date()) : "00:00";
 }
 
 function onEvent(event) {

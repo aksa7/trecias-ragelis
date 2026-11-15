@@ -48,6 +48,8 @@ Do not judge or score; only report what is actually present in the call so far.
 
 The transcript comes from speech recognition of phone audio: words are often misheard
 (e.g. "iš ledų" for "iš banko"). Go by the meaning. CALLER called; RECIPIENT is the person being protected.
+The "call" can also be a single text message (SMS) the RECIPIENT received from the CALLER: judge it the same way
+(a link to open or a fee to pay counts as a request).
 
 claimed_identity: who the CALLER says they are (unknown if not said).
 requests: only things the CALLER actually asks the RECIPIENT to do or give:

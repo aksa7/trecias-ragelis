@@ -2,12 +2,14 @@
 // (a scared person can panic); the family is told by SMS and handles it.
 //   level 3 → SMS to the family
 //   level 5 → the call is cut immediately, then SMS to the family again
+//   texts on the SMS line (textLine.ts): level 3 → SMS to the family, level 5 → links blocked + SMS
 //   after a level 3+ call → the summary; if the risk had dropped back below 50 by the end
 //                           (nothing was really asked), a calming "probably fine" message instead
 import type { Twilio } from 'twilio';
-import { bus, type Level } from '../events';
+import { bus, type CallEvent, type Level } from '../events';
 import { say } from '../language';
 import { familyContacts, textFamily } from './sms';
+import { isTextRoom } from './textLine';
 
 // The protected person as used in the texts: in Lithuanian the name in dative ("Mamai"), in English
 // VICTIM_NAME_EN ("Mum"); the gender gives "jai" / "jam" and "her" / "him".
@@ -37,12 +39,18 @@ export function startActions(client: Twilio, messagingServiceSid: string | null)
     bus.emit({ type: 'action', room, kind: 'family_sms', text: `SMS → ${to}: “${body}”` });
   };
 
-  bus.on((event) => {
+  // React after every listener has seen the event, so an action never reaches the dashboard before
+  // the level change that caused it.
+  bus.on((event) => queueMicrotask(() => handle(event)));
+
+  function handle(event: CallEvent) {
     if (event.type === 'risk') {
       lastRisk.set(event.room, event.score);
     } else if (event.type === 'level') {
       highestLevel.set(event.room, event.level);
-      if (event.level === 3) {
+      if (isTextRoom(event.room)) {
+        textAlert(event.room, event.level, event.reason);
+      } else if (event.level === 3) {
         void sms(
           event.room,
           say(
@@ -51,7 +59,7 @@ export function startActions(client: Twilio, messagingServiceSid: string | null)
           ),
         );
       }
-      if (event.level === 5) void intervene(event.room, event.reason);
+      if (event.level === 5 && !isTextRoom(event.room)) void intervene(event.room, event.reason);
     } else if (event.type === 'summary' && (highestLevel.get(event.room) ?? 1) >= 3) {
       const calmedDown = highestLevel.get(event.room) === 3 && (lastRisk.get(event.room) ?? 0) < 50;
       const prefix = calmedDown
@@ -59,7 +67,29 @@ export function startActions(client: Twilio, messagingServiceSid: string | null)
         : 'BustedAI:';
       void sms(event.room, `${prefix} ${event.text}`);
     }
-  });
+  }
+
+  /** A text on the SMS line: level 3 warns the family, level 5 also blocks its links on the victim's phone. */
+  function textAlert(room: string, level: Level, reason: string) {
+    if (level === 3) {
+      void sms(
+        room,
+        say(
+          `BustedAI: ${VICTIM} gavo įtartiną SMS. ${sentence(reason)}. Paskambinkite ${HIM_OR_HER}.`,
+          `BustedAI: ${VICTIM} got a suspicious text. ${sentence(reason)}. Please call ${HIM_OR_HER}.`,
+        ),
+      );
+    } else if (level === 5) {
+      bus.emit({ type: 'action', room, kind: 'victim_warning', text: `${say('Sukčių SMS užblokuota', 'Scam text blocked')}: ${reason}` });
+      void sms(
+        room,
+        say(
+          `BustedAI: ${VICTIM} gavo sukčių SMS, nuorodos užblokuotos. ${sentence(reason)}. Paskambinkite ${HIM_OR_HER} dabar.`,
+          `BustedAI: ${VICTIM} got a SCAM text, its links are blocked. ${sentence(reason)}. Call ${HIM_OR_HER} now.`,
+        ),
+      );
+    }
+  }
 
   async function intervene(room: string, reason: string) {
     // Cut first: every second on the line is a chance to read out a code.

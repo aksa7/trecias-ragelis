@@ -10,6 +10,7 @@ import { ensureApiKey, ensureTwimlApp } from './twilioSetup';
 import { TRANSCRIPTION_HINTS } from './hints';
 import { startActions } from './actions';
 import { ensureMessagingService } from './sms';
+import { registerTextLine } from './textLine';
 
 type Role = 'scammer' | 'victim';
 type TwilioBody = Record<string, string>;
@@ -31,6 +32,7 @@ export async function registerTelephony(app: FastifyInstance) {
     return null;
   });
   startActions(client, messagingServiceSid);
+  registerTextLine(app);
   let publicUrl = '';
   let appSid = '';
 

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Messages</title>
+  <style>
+    /* The victim's phone on the SMS line: an iOS Messages-style thread. Texts from the scammer's text page
+       arrive here with BustedAI's verdict under them; at Fraud their links are blocked. */
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; justify-content: center;
+      font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; background: #f2f2f7; color: #000;
+    }
+    main { width: 100%; max-width: 430px; min-height: 100vh; display: flex; flex-direction: column; background: #fff; }
+    header {
+      position: sticky; top: 0; padding: 14px 16px 10px; text-align: center;
+      background: rgba(247, 247, 247, 0.92); backdrop-filter: blur(20px); border-bottom: 1px solid #e5e5ea;
+    }
+    .contact { width: 52px; height: 52px; margin: 0 auto 4px; border-radius: 50%; background: linear-gradient(#a1a1aa, #71717a);
+      display: grid; place-items: center; color: #fff; font-size: 24px; }
+    .number { font-size: 13px; color: #3c3c43; }
+    .guard { margin-top: 2px; font-size: 11px; color: #8e8e93; }
+    .thread { flex: 1; padding: 16px 12px 32px; display: flex; flex-direction: column; gap: 6px; }
+    .empty { margin: auto; color: #8e8e93; font-size: 15px; text-align: center; }
+    .time { margin: 14px 0 4px; text-align: center; font-size: 11px; color: #8e8e93; }
+    .bubble {
+      align-self: flex-start; max-width: 78%; padding: 9px 13px; border-radius: 19px; border-bottom-left-radius: 6px;
+      background: #e9e9eb; font-size: 16px; line-height: 1.3; white-space: pre-wrap; overflow-wrap: anywhere;
+      animation: pop 0.3s ease-out;
+    }
+    @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
+    .link { color: #0a64d8; text-decoration: underline; }
+    .blocked .link { color: #8e8e93; text-decoration: line-through; }
+    .verdict {
+      align-self: flex-start; max-width: 78%; margin: 2px 0 6px 4px; padding: 6px 10px; border-radius: 10px;
+      font-size: 13px; font-weight: 600; line-height: 1.3; animation: pop 0.3s ease-out;
+    }
+    .verdict.checking { color: #8e8e93; font-weight: 400; }
+    .verdict.safe { background: #e8f7ec; color: #1f7a3a; }
+    .verdict.suspicious { background: #fff4d6; color: #8a5a00; }
+    .verdict.fraud { background: #ffe1e1; color: #b3261e; }
+    .verdict small { display: block; font-weight: 400; opacity: 0.85; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="contact">?</div>
+    <div class="number">Unknown sender</div>
+    <div class="guard">🛡️ Protected by BustedAI</div>
+  </header>
+  <section id="thread" class="thread">
+    <p id="empty" class="empty">No messages yet</p>
+  </section>
+</main>
+<script type="module">
+  const VERDICTS = {
+    1: ["safe", "✓ Looks safe"],
+    3: ["suspicious", "⚠️ Suspicious: don't reply or pay. Your family was told."],
+    5: ["fraud", "⛔ Scam: the links are blocked. Your family was told."],
+  };
+  const thread = document.getElementById("thread");
+  const texts = new Map(); // room → { bubble, verdict, risk, level, reason }
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  /** The text with web addresses marked as links (never real links: nothing here can be opened). */
+  function withLinks(text) {
+    const parts = text.split(/((?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?)/gi);
+    return parts.map((part, i) => (i % 2 ? el("span", "link", part) : document.createTextNode(part)));
+  }
+
+  function addText(room, text) {
+    document.getElementById("empty")?.remove();
+    const now = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    const bubble = el("div", "bubble");
+    bubble.append(...withLinks(text));
+    const verdict = el("div", "verdict checking", "Checking…");
+    thread.append(el("div", "time", `Today ${now}`), bubble, verdict);
+    texts.set(room, { bubble, verdict, level: 1, reason: "" });
+    // The verdict shows once the brain has had a moment (keywords are instant, Claude takes ~2 s).
+    setTimeout(() => show(room), 2500);
+    scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  }
+
+  function show(room) {
+    const item = texts.get(room);
+    if (!item) return;
+    const [style, title] = VERDICTS[item.level];
+    item.verdict.className = `verdict ${style}`;
+    item.verdict.replaceChildren(title, ...(item.level > 1 && item.reason ? [el("small", "", item.reason)] : []));
+    item.bubble.classList.toggle("blocked", item.level === 5);
+    item.shown = true;
+  }
+
+  function onEvent(event) {
+    if (event.type === "call_started" && event.from?.startsWith("sms:")) return void texts.set(event.room, null);
+    if (event.type === "transcript" && texts.has(event.room) && !texts.get(event.room)) return addText(event.room, event.text);
+    const item = texts.get(event.room);
+    if (!item) return;
+    if (event.type === "risk") item.reason = event.reason;
+    if (event.type === "level") {
+      item.level = event.level;
+      if (event.level > 1) item.reason = event.reason;
+    }
+    if (item.shown) show(event.room); // a later, stronger verdict updates the label
+  }
+
+  // Like the dashboard: a freshly opened page skips the history the server replays first.
+  const events = new EventSource("/events");
+  let catchingUp = true;
+  events.onmessage = (message) => !catchingUp && onEvent(JSON.parse(message.data));
+  events.addEventListener("live", () => (catchingUp = false));
+</script>
+</body>
+</html>

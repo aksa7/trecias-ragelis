@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scammer's texts</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    textarea {
+      width: 100%; min-height: 120px; padding: 14px; border: 0; border-radius: 14px; resize: vertical;
+      background: #1f1f1f; color: #eee; font: 16px/1.4 -apple-system, system-ui, sans-serif;
+    }
+    .examples { display: grid; gap: 8px; margin: 0 0 16px; text-align: left; }
+    .examples button {
+      margin: 0; padding: 10px 14px; border-radius: 12px; background: #262626; color: #ccc;
+      font-size: 14px; font-weight: 400; text-align: left;
+    }
+    .examples b { color: #fff; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>🕵️ Scammer's texts</h1>
+  <p class="sub">Sends an SMS to the victim's Messages page</p>
+  <div class="examples" id="examples"></div>
+  <textarea id="text" maxlength="600" placeholder="Type a text…"></textarea>
+  <button id="send" class="blue">Send text</button>
+  <div id="status"></div>
+</main>
+<script type="module">
+  import { setStatus } from "./phone.js";
+
+  // Ready-made texts for the demo: from harmless to a clear scam.
+  const EXAMPLES = [
+    ["Safe", "Hi, it's Laura from the clinic. A reminder that your appointment is tomorrow at 10:00."],
+    ["Suspicious", "Hi Mum, it's me, my phone broke so this is my new number. Can you send me 300 euros today? I'll explain later."],
+    ["Fraud", "DPD: your parcel is on hold. Pay the 1.99 EUR delivery fee here to release it: dpd-lt-delivery.com/pay"],
+    ["Fraud", "SECURITY ALERT: your bank account will be blocked today. Confirm your login and Smart-ID here: bank-lt-secure.com"],
+  ];
+  const $ = (id) => document.getElementById(id);
+  for (const [label, text] of EXAMPLES) {
+    const button = document.createElement("button");
+    button.innerHTML = `<b>${label}:</b> `;
+    button.append(text);
+    button.onclick = () => ($("text").value = text);
+    $("examples").append(button);
+  }
+
+  $("send").onclick = async () => {
+    const text = $("text").value.trim();
+    if (!text) return;
+    $("send").disabled = true;
+    try {
+      const res = await fetch("/text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
+      setStatus("Sent ✓", "ok");
+      $("text").value = "";
+    } catch (err) {
+      setStatus(err.message, "error");
+    } finally {
+      $("send").disabled = false;
+    }
+  };
+</script>
+</body>
+</html>
