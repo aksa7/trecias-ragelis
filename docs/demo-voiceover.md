@@ -1,7 +1,7 @@
 # Demo voice-over (ElevenLabs)
 
 The same call that the dashboard plays in `?demo` mode (`dashboard/demo.js`), in English for the pitch. It goes
-through all three levels: **All good → Suspicious (family gets an SMS) → Scammer (call is cut)**.
+through all three levels: **Safe → Suspicious (family gets an SMS) → Fraud (call is cut)**.
 
 Generate it in ElevenLabs, then put the audio over the screen recording (or save it as `dashboard/demo.mp3`
 and the timings in `demo.js` can be synced to the real audio).
@@ -34,13 +34,13 @@ End the audio with a short hang-up tone right after her "let me—". GETBUSTED c
 asks for the code, so grandma never gets to read it out.
 
 The dashboard numbers are what the real brain (keywords + Claude + rules) produced for these exact lines at
-this pace: 25 → 37 → 60 **Suspicious** → 85 **Scammer**, cut → 95.
+this pace: 25 → 37 → 60 **Suspicious** → 85 **Fraud**, cut → 95.
 
 ## What the dashboard shows at each line
 
 | # | Line | Dashboard |
 |---|------|-----------|
-| 1 | CALLER: Good afternoon, this is John from your bank's security department. | **All good**, risk 25 |
+| 1 | CALLER: Good afternoon, this is John from your bank's security department. | **Safe**, risk 25 |
 | 2 | GRANDMA: Oh, hello. Is something wrong? | |
 | 3 | CALLER: We've noticed an unusual payment of 2,400 euros leaving your account. | |
 | 4 | GRANDMA: Oh dear... I didn't send any money! | |
@@ -48,5 +48,5 @@ this pace: 25 → 37 → 60 **Suspicious** → 85 **Scammer**, cut → 95.
 | 6 | GRANDMA: All right... what do I need to do? | |
 | 7 | CALLER: We'll move your savings to a safe account. And please, don't tell anyone… | risk 60, **Suspicious**, banner "SMS sent to family" |
 | 8 | GRANDMA: Not even my daughter? She always helps me with the bank... | |
-| 9 | CALLER: No, this is a confidential investigation. You've just received a Smart-ID code. Read it to me. | risk 85, **Scammer**, crimson banner "Call cut" |
+| 9 | CALLER: No, this is a confidential investigation. You've just received a Smart-ID code. Read it to me. | risk 85, **Fraud**, crimson banner "Call cut" |
 | 10 | GRANDMA: Wait a moment, let me— *(hang-up tone)* | risk 95, second SMS, summary |

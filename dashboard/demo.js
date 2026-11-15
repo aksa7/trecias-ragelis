@@ -3,7 +3,7 @@
 // Plays with the ElevenLabs voice-over demo.mp3 (script: docs/demo-voiceover.md). Each line appears 0.4 s
 // after its speaker stops in the audio, like a final transcript. Risk, levels and their delays are what the
 // real brain produced for these lines (reasons translated from Lithuanian):
-// All good (1) → Suspicious (3, family SMS) → Scammer (5, call cut right after the code request).
+// Safe (1) → Suspicious (3, family SMS) → Fraud (5, call cut right after the code request).
 
 const ROOM = "room-DEMO";
 const SCRIPT = [

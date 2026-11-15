@@ -18,7 +18,7 @@ const REPLAY = params.has("replay") ? params.get("replay") || "latest" : null;
 
 const TEXT = {
   speakers: { scammer: "CALLER", victim: "GRANDMA" },
-  states: { 1: "All good", 3: "Suspicious", 5: "Scammer" },
+  states: { 1: "Safe", 3: "Suspicious", 5: "Fraud" },
   cut: "Call cut",
   sms: "SMS sent to family",
   live: { waiting: "WAITING", live: "LIVE", cut: "CUT", ended: "ENDED" },
@@ -260,6 +260,12 @@ if (DEMO || REPLAY) {
   loop();
 } else {
   // Live: the call is made on the phones; this page waits for it and shows it.
+  // A freshly opened page starts clean: it skips the history the server replays first and shows only
+  // calls from now on. After a reconnect it takes the history again, to rebuild the call it was showing.
   const events = new EventSource("/events");
-  events.onmessage = (message) => onEvent(JSON.parse(message.data));
+  let catchingUp = true;
+  events.onmessage = (message) => {
+    if (!catchingUp) onEvent(JSON.parse(message.data));
+  };
+  events.addEventListener("live", () => (catchingUp = false));
 }
