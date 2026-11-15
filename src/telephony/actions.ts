@@ -2,7 +2,7 @@
 // (a scared person can panic); the family is told by SMS and handles it.
 //   level 3 → SMS to the family
 //   level 5 → the call is cut immediately, then SMS to the family again
-//   texts on the SMS line (textLine.ts): level 3 → SMS to the family, level 5 → the text is blocked + SMS
+//   texts on the SMS line (textLine.ts): a text judged level 3+ is blocked there → one SMS to the family
 //   after a level 3+ call → the summary; if the risk had dropped back below 50 by the end
 //                           (nothing was really asked), a calming "probably fine" message instead
 import type { Twilio } from 'twilio';
@@ -48,9 +48,8 @@ export function startActions(client: Twilio, messagingServiceSid: string | null)
       lastRisk.set(event.room, event.score);
     } else if (event.type === 'level') {
       highestLevel.set(event.room, event.level);
-      if (isTextRoom(event.room)) {
-        textAlert(event.room, event.level, event.reason);
-      } else if (event.level === 3) {
+      if (isTextRoom(event.room)) return; // texts: textLine.ts decides, see below
+      if (event.level === 3) {
         void sms(
           event.room,
           say(
@@ -59,7 +58,9 @@ export function startActions(client: Twilio, messagingServiceSid: string | null)
           ),
         );
       }
-      if (event.level === 5 && !isTextRoom(event.room)) void intervene(event.room, event.reason);
+      if (event.level === 5) void intervene(event.room, event.reason);
+    } else if (event.type === 'action' && event.kind === 'victim_warning' && isTextRoom(event.room)) {
+      textBlocked(event.room, event.text);
     } else if (event.type === 'summary' && (highestLevel.get(event.room) ?? 1) >= 3) {
       const calmedDown = highestLevel.get(event.room) === 3 && (lastRisk.get(event.room) ?? 0) < 50;
       const prefix = calmedDown
@@ -69,26 +70,17 @@ export function startActions(client: Twilio, messagingServiceSid: string | null)
     }
   }
 
-  /** A text on the SMS line: level 3 warns the family; at level 5 the text never reaches the victim. */
-  function textAlert(room: string, level: Level, reason: string) {
-    if (level === 3) {
-      void sms(
-        room,
-        say(
-          `BustedAI: ${VICTIM} gavo įtartiną SMS. ${sentence(reason)}. Paskambinkite ${HIM_OR_HER}.`,
-          `BustedAI: ${VICTIM} got a suspicious text. ${sentence(reason)}. Please call ${HIM_OR_HER}.`,
-        ),
-      );
-    } else if (level === 5) {
-      bus.emit({ type: 'action', room, kind: 'victim_warning', text: `${say('Sukčių SMS užblokuota', 'Scam text blocked')}: ${reason}` });
-      void sms(
-        room,
-        say(
-          `BustedAI: užblokavome sukčių SMS, skirtą ${VICTIM}. ${sentence(reason)}. Paskambinkite ${HIM_OR_HER}.`,
-          `BustedAI: we BLOCKED a scam text to ${VICTIM}, it never reached ${HIM_OR_HER}. ${sentence(reason)}. Give ${HIM_OR_HER} a call.`,
-        ),
-      );
-    }
+  /** A text on the SMS line was held back from the victim: tell the family once. */
+  function textBlocked(room: string, actionText: string) {
+    const scam = highestLevel.get(room) === 5;
+    const reason = sentence(actionText.slice(actionText.indexOf(':') + 1));
+    void sms(
+      room,
+      say(
+        `BustedAI: užblokavome ${scam ? 'sukčių' : 'įtartiną'} SMS, skirtą ${VICTIM}. ${reason}. Paskambinkite ${HIM_OR_HER}.`,
+        `BustedAI: we BLOCKED a ${scam ? 'scam' : 'suspicious'} text to ${VICTIM}, it never reached ${HIM_OR_HER}. ${reason}. Give ${HIM_OR_HER} a call.`,
+      ),
+    );
   }
 
   async function intervene(room: string, reason: string) {

@@ -20,7 +20,6 @@ const TEXT = {
   speakers: { scammer: "CALLER", victim: "GRANDMA", sender: "SENDER" },
   states: { 1: "Safe", 3: "Suspicious", 5: "Fraud" },
   cut: "Call cut",
-  blocked: "Scam text blocked",
   sms: "SMS sent to family",
   live: { waiting: "WAITING", live: "LIVE", cut: "CUT", ended: "ENDED", text: "SMS" },
 };
@@ -70,6 +69,12 @@ function el(tag, className, text) {
 /** A text from the SMS line (shown like a one-line call) rather than a phone call. */
 const isText = () => call.from.startsWith("sms:");
 
+/** The text a blocked SMS was blocked for ("Suspicious text blocked: <reason>"), or null. */
+const blockedText = () => call.actions.find((a) => a.kind === "victim_warning") ?? null;
+
+/** The level to show: a blocked text counts as at least Suspicious, even if only its risk was high. */
+const shownLevel = () => (blockedText() ? Math.max(call.level, 3) : call.level);
+
 /** "02:31": time since the call started. */
 function clock(at) {
   if (!call.startedAt || !at) return "00:00";
@@ -103,8 +108,15 @@ function textWithMark(text, marked) {
 
 /** What a banner / log entry says about an action. */
 function describe(action) {
+  const blocked = blockedText();
+  if (blocked) {
+    // A blocked text: "Scam text blocked: <reason>" or "Suspicious text blocked: <reason>".
+    const [title, ...rest] = blocked.text.split(": ");
+    if (action === blocked) return { style: "cut", icon: "sms", title, detail: rest.join(": "), at: action.at };
+    return { style: "sms", icon: "sms", title: TEXT.sms, detail: rest.join(": "), at: action.at };
+  }
   const reason = call.levelChanges.filter((c) => c.at <= action.at).at(-1)?.reason ?? "";
-  const title = { intervention: TEXT.cut, victim_warning: TEXT.blocked }[action.kind] ?? TEXT.sms;
+  const title = action.kind === "intervention" ? TEXT.cut : TEXT.sms;
   const icon = action.kind === "intervention" ? "cut" : "sms";
   return { style: action.kind === "family_sms" ? "sms" : "cut", icon, title, detail: reason, at: action.at };
 }
@@ -152,7 +164,7 @@ function renderMeter() {
   $("meter-arc").style.strokeDasharray = `${(METER_LENGTH * risk) / 100} ${METER_LENGTH}`;
   $("meter-knob").style.transform = `rotate(${(360 * risk) / 100}deg)`;
   $("meter-value").textContent = risk;
-  $("meter-state").textContent = TEXT.states[call.level];
+  $("meter-state").textContent = TEXT.states[shownLevel()];
 
   const delta = risk - meterRisk;
   meterRisk = risk;
@@ -190,7 +202,7 @@ function render() {
   }
   const live = Boolean(call.room && !call.endedAt);
   const cut = call.actions.some((a) => a.kind === "intervention");
-  document.body.dataset.level = String(call.level);
+  document.body.dataset.level = String(shownLevel());
   document.body.classList.toggle("on-air", live && !isText());
   document.body.classList.toggle("idle", !call.room); // waiting screen until a call starts
 
