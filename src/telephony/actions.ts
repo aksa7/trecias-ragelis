@@ -2,7 +2,7 @@
 // (a scared person can panic); the family is told by SMS and handles it.
 //   level 3 → SMS to the family
 //   level 5 → the call is cut immediately, then SMS to the family again
-//   texts on the SMS line (textLine.ts): level 3 → SMS to the family, level 5 → links blocked + SMS
+//   texts on the SMS line (textLine.ts): level 3 → SMS to the family, level 5 → the text is blocked + SMS
 //   after a level 3+ call → the summary; if the risk had dropped back below 50 by the end
 //                           (nothing was really asked), a calming "probably fine" message instead
 import type { Twilio } from 'twilio';
@@ -69,7 +69,7 @@ export function startActions(client: Twilio, messagingServiceSid: string | null)
     }
   }
 
-  /** A text on the SMS line: level 3 warns the family, level 5 also blocks its links on the victim's phone. */
+  /** A text on the SMS line: level 3 warns the family; at level 5 the text never reaches the victim. */
   function textAlert(room: string, level: Level, reason: string) {
     if (level === 3) {
       void sms(
@@ -84,8 +84,8 @@ export function startActions(client: Twilio, messagingServiceSid: string | null)
       void sms(
         room,
         say(
-          `BustedAI: ${VICTIM} gavo sukčių SMS, nuorodos užblokuotos. ${sentence(reason)}. Paskambinkite ${HIM_OR_HER} dabar.`,
-          `BustedAI: ${VICTIM} got a SCAM text, its links are blocked. ${sentence(reason)}. Call ${HIM_OR_HER} now.`,
+          `BustedAI: užblokavome sukčių SMS, skirtą ${VICTIM}. ${sentence(reason)}. Paskambinkite ${HIM_OR_HER}.`,
+          `BustedAI: we BLOCKED a scam text to ${VICTIM}, it never reached ${HIM_OR_HER}. ${sentence(reason)}. Give ${HIM_OR_HER} a call.`,
         ),
       );
     }

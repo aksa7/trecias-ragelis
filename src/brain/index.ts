@@ -117,7 +117,18 @@ async function assess(room: string, call: CallState) {
     console.error('[brain] Claude assessment failed:', err instanceof Error ? err.message : err);
   } finally {
     call.scoring = false;
+    assessedWaiters.get(room)?.forEach((resolve) => resolve());
+    assessedWaiters.delete(room);
   }
+}
+
+const assessedWaiters = new Map<string, (() => void)[]>();
+
+/** Resolves once Claude has judged everything said in the room so far (at once if nothing is being judged). */
+export function whenAssessed(room: string): Promise<void> {
+  const call = calls.get(room);
+  if (!call?.scoring) return Promise.resolve();
+  return new Promise((resolve) => assessedWaiters.set(room, [...(assessedWaiters.get(room) ?? []), resolve]));
 }
 
 function onTranscript(room: string, line: Line) {

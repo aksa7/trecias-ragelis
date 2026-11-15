@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 
 export type Level = 1 | 3 | 5;
-export type ActionKind = 'monitoring' | 'family_sms' | 'victim_warning' | 'intervention';
+export type ActionKind = 'monitoring' | 'family_sms' | 'victim_warning' | 'intervention' | 'text_delivered';
 
 export type CallEvent =
   | { type: 'call_started'; room: string; from: string }

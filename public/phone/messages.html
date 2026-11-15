@@ -6,7 +6,7 @@
   <title>Messages</title>
   <style>
     /* The victim's phone on the SMS line: an iOS Messages-style thread. Texts from the scammer's text page
-       arrive here with BustedAI's verdict under them; at Fraud their links are blocked. */
+       arrive here with BustedAI's verdict under them; scam texts are held back and never arrive. */
     * { box-sizing: border-box; }
     body {
       margin: 0; min-height: 100vh; display: flex; justify-content: center;
@@ -36,7 +36,6 @@
       align-self: flex-start; max-width: 78%; margin: 2px 0 6px 4px; padding: 6px 10px; border-radius: 10px;
       font-size: 13px; font-weight: 600; line-height: 1.3; animation: pop 0.3s ease-out;
     }
-    .verdict.checking { color: #8e8e93; font-weight: 400; }
     .verdict.safe { background: #e8f7ec; color: #1f7a3a; }
     .verdict.suspicious { background: #fff4d6; color: #8a5a00; }
     .verdict.fraud { background: #ffe1e1; color: #b3261e; }
@@ -61,7 +60,7 @@
     5: ["fraud", "⛔ Scam: the links are blocked. Your family was told."],
   };
   const thread = document.getElementById("thread");
-  const texts = new Map(); // room → { bubble, verdict, risk, level, reason }
+  const texts = new Map(); // room → { level, reason, bubble?, verdict? }; bubble once the text is delivered
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -76,40 +75,35 @@
     return parts.map((part, i) => (i % 2 ? el("span", "link", part) : document.createTextNode(part)));
   }
 
-  function addText(room, text) {
+  /** The server delivers a text only after the brain judged it; scam texts never arrive. */
+  function deliver(item, text) {
     document.getElementById("empty")?.remove();
     const now = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-    const bubble = el("div", "bubble");
-    bubble.append(...withLinks(text));
-    const verdict = el("div", "verdict checking", "Checking…");
-    thread.append(el("div", "time", `Today ${now}`), bubble, verdict);
-    texts.set(room, { bubble, verdict, level: 1, reason: "" });
-    // The verdict shows once the brain has had a moment (keywords are instant, Claude takes ~2 s).
-    setTimeout(() => show(room), 2500);
+    item.bubble = el("div", "bubble");
+    item.bubble.append(...withLinks(text));
+    item.verdict = el("div", "verdict");
+    thread.append(el("div", "time", `Today ${now}`), item.bubble, item.verdict);
+    show(item);
     scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
   }
 
-  function show(room) {
-    const item = texts.get(room);
-    if (!item) return;
+  function show(item) {
     const [style, title] = VERDICTS[item.level];
     item.verdict.className = `verdict ${style}`;
     item.verdict.replaceChildren(title, ...(item.level > 1 && item.reason ? [el("small", "", item.reason)] : []));
     item.bubble.classList.toggle("blocked", item.level === 5);
-    item.shown = true;
   }
 
   function onEvent(event) {
-    if (event.type === "call_started" && event.from?.startsWith("sms:")) return void texts.set(event.room, null);
-    if (event.type === "transcript" && texts.has(event.room) && !texts.get(event.room)) return addText(event.room, event.text);
+    if (event.type === "call_started" && event.from?.startsWith("sms:")) return void texts.set(event.room, { level: 1, reason: "" });
     const item = texts.get(event.room);
     if (!item) return;
-    if (event.type === "risk") item.reason = event.reason;
+    if (event.type === "action" && event.kind === "text_delivered") return deliver(item, event.text);
     if (event.type === "level") {
       item.level = event.level;
       if (event.level > 1) item.reason = event.reason;
     }
-    if (item.shown) show(event.room); // a later, stronger verdict updates the label
+    if (item.bubble) show(item); // a later, stronger verdict updates a delivered text
   }
 
   // Like the dashboard: a freshly opened page skips the history the server replays first.
